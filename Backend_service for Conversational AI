@@ -1,0 +1,107 @@
+!pip install sqlalchemy pandas requests
+import pandas as pd 
+import requests
+from sqlalchemy import create_engine,column,Integer,text,ForeignKey,DateTime
+from sqlalchemy.orm import declarative_base,sessionmaker
+from datetime import datetime
+Base=declarative_base()
+engine=create_engine('sqlite:///chatbot.db')
+sessionLocal=sessionmaker(bind=engine)
+db=sessionLocal
+#DEFINE DATA SCHEMA
+class Product(Base):
+    __tablename__ = "products"
+    product_id = Column(Integer, primary_key=True)
+    product_name = Column(String)
+    price = Column(Integer)
+
+class Order(Base):
+    __tablename__ = "orders"
+    order_id = Column(Integer, primary_key=True)
+    product_id = Column(Integer)
+    customer_id = Column(Integer)
+    status = Column(String)
+
+class Inventory(Base):
+    __tablename__ = "inventory"
+    product_id = Column(Integer, primary_key=True)
+    product_name = Column(String)
+    stock = Column(Integer)
+
+class Session(Base):
+    __tablename__ = "sessions"
+    session_id = Column(Integer, primary_key=True)
+    user_id = Column(Integer)
+
+class Message(Base):
+    __tablename__ = "messages"
+    message_id = Column(Integer, primary_key=True)
+    session_id = Column(Integer, ForeignKey("sessions.session_id"))
+    sender = Column(String)
+    message = Column(Text)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
+Base.metadata.create_all(engine)
+#load the sample csv data
+products_df = pd.DataFrame({
+    "product_id": [1, 2, 3],
+    "product_name": ["Classic T-Shirt", "Denim Jacket", "Hoodie"],
+    "price": [399, 999, 799]
+})
+
+orders_df = pd.DataFrame({
+    "order_id": [12345, 12346, 12347],
+    "product_id": [1, 2, 1],
+    "customer_id": [501, 502, 503],
+    "status": ["shipped", "pending", "delivered"]
+})
+
+inventory_df = pd.DataFrame({
+    "product_id": [1, 2, 3],
+    "product_name": ["Classic T-Shirt", "Denim Jacket", "Hoodie"],
+    "stock": [34, 21, 12]
+})
+#insert into database
+for _, row in products_df.iterrows():
+    db.add(Product(**row))
+
+for _, row in orders_df.iterrows():
+    db.add(Order(**row))
+
+for _, row in inventory_df.iterrows():
+    db.add(Inventory(**row))
+
+db.commit()
+#aplly LLM function
+def query_groq(prompt):
+    headers = {"Authorization": "Bearer YOUR_API_KEY"}
+    response = requests.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers=headers,
+        json={
+            "model": "mixtral-8x7b-32768",
+            "messages": [{"role": "user", "content": prompt}]
+        }
+    )
+    return response.json()['choices'][0]['message']['content']
+#simulation with the chat bot
+def chat(user_message, session_id=None):
+    if session_id is None:
+        new_session = Session(user_id=1)
+        db.add(new_session)
+        db.commit()
+        db.refresh(new_session)
+        session_id = new_session.session_id
+
+    user_msg = Message(session_id=session_id, sender="user", message=user_message)
+    db.add(user_msg)
+    db.commit()
+
+    ai_response = query_groq(user_message)
+
+    ai_msg = Message(session_id=session_id, sender="ai", message=ai_response)
+    db.add(ai_msg)
+    db.commit()
+
+    return {"session_id": session_id, "response": ai_response}
+chat("What are the top 5 most sold products?")
