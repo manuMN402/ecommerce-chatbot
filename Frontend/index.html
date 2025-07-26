@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset = "UTF-8"/>
+    <title>Customer Support Chatbot</title>
+
+</head>
+<body>
+    <h2>Ask the E-commerce Chatbot</h2>
+    <input type="text" id="question" placeholder="e.g., What are the top products?"style="width:300px;"/>
+    <button onclick="askBot()">Ask</button>
+    <pre id=""answer></pre>
+    <script>
+        async function askBot(){
+            const q=document.getElementById("question").value.toLowerCase();
+            let responce;
+            if(q.includes("top")&& q.includes("product")){
+                responce=await fetch("http://127.0.0.1:5000/top-products");
+
+            }
+            else if(q.includes("order id")){
+                const order_id=q.match(|\d+)[0];
+                responce=await fetch("http://127.0.0.1:5000/order-status/${orderId}");
+
+            }
+            else if(q.includes("stock")|| q.includes("how many")){
+                const productName=q.split("").slice(-3).join("");
+                response=await fetch("http://127.0.0.1:5000/stock${productName}");
+
+            }
+            else{
+                document.getElementById("answer").textContent="sorry,I didn't understand the question.";
+                return;
+            }
+            const data=await response.json();
+            document.getElementById("answer").textContent=JSON.stringify(data,null,2)
+
+        }
+    </script>
+</body>
+
+</html>
