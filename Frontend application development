@@ -1,0 +1,164 @@
+// src/context/ChatContext.js
+import { createContext, useState } from "react";
+import axios from "axios";
+
+export const ChatContext = createContext();
+
+export const ChatProvider = ({ children }) => {
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [conversationId, setConversationId] = useState(null);
+  const [history, setHistory] = useState([]);
+
+  const sendMessage = async (text) => {
+    setLoading(true);
+    setMessages((prev) => [...prev, { sender: "user", message: text }]);
+
+    const res = await axios.post("http://localhost:8000/api/chat", {
+      message: text,
+      conversation_id: conversationId,
+    });
+
+    setMessages((prev) => [...prev, { sender: "ai", message: res.data.response }]);
+    setConversationId(res.data.conversation_id);
+
+    setHistory((prev) => {
+      const exists = prev.find((h) => h.id === res.data.conversation_id);
+      if (!exists) return [...prev, { id: res.data.conversation_id }];
+      return prev;
+    });
+
+    setLoading(false);
+  };
+
+  const loadSession = async (sessionId) => {
+    const res = await axios.get(`http://localhost:8000/api/session/${sessionId}`);
+    setMessages(res.data.messages);
+    setConversationId(sessionId);
+  };
+
+  return (
+    <ChatContext.Provider value={{ messages, sendMessage, loading, history, loadSession }}>
+      {children}
+    </ChatContext.Provider>
+  );
+};
+
+
+// src/components/Message.jsx
+import React from "react";
+
+const Message = ({ sender, text }) => {
+  return (
+    <div style={{
+      textAlign: sender === "user" ? "right" : "left",
+      margin: "10px",
+      backgroundColor: sender === "user" ? "#e0f7fa" : "#f1f8e9",
+      padding: "8px",
+      borderRadius: "10px",
+      maxWidth: "70%",
+      alignSelf: sender === "user" ? "flex-end" : "flex-start"
+    }}>
+      <strong>{sender === "user" ? "You" : "AI"}</strong>: {text}
+    </div>
+  );
+};
+
+export default Message;
+
+
+// src/components/MessageList.jsx
+import React from "react";
+import Message from "./Message";
+
+const MessageList = ({ messages }) => {
+  return (
+    <div style={{ padding: "10px", height: "300px", overflowY: "scroll" }}>
+      {messages.map((msg, idx) => (
+        <Message key={idx} sender={msg.sender} text={msg.message} />
+      ))}
+    </div>
+  );
+};
+
+export default MessageList;
+
+
+// src/components/UserInput.jsx
+import React, { useContext, useState } from "react";
+import { ChatContext } from "../context/ChatContext";
+
+const UserInput = () => {
+  const { sendMessage, loading } = useContext(ChatContext);
+  const [input, setInput] = useState("");
+
+  const handleSend = () => {
+    if (input.trim()) {
+      sendMessage(input);
+      setInput("");
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+      <input
+        type="text"
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        style={{ flex: 1 }}
+        placeholder="Type your message..."
+      />
+      <button onClick={handleSend} disabled={loading}>Send</button>
+    </div>
+  );
+};
+
+export default UserInput;
+
+
+// src/components/ChatWindow.jsx
+import React, { useContext } from "react";
+import MessageList from "./MessageList";
+import UserInput from "./UserInput";
+import { ChatContext } from "../context/ChatContext";
+
+const ChatWindow = () => {
+  const { messages, history, loadSession } = useContext(ChatContext);
+
+  return (
+    <div style={{ display: "flex", border: "1px solid gray", width: "700px", height: "400px" }}>
+      <div style={{ width: "150px", borderRight: "1px solid #ccc", padding: "10px" }}>
+        <h4>Sessions</h4>
+        {history.map(h => (
+          <div key={h.id} onClick={() => loadSession(h.id)} style={{ cursor: "pointer", padding: "5px 0" }}>
+            Session {h.id}
+          </div>
+        ))}
+      </div>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <MessageList messages={messages} />
+        <UserInput />
+      </div>
+    </div>
+  );
+};
+
+export default ChatWindow;
+
+
+// src/App.jsx
+import React from "react";
+import { ChatProvider } from "./context/ChatContext";
+import ChatWindow from "./components/ChatWindow";
+
+const App = () => {
+  return (
+    <ChatProvider>
+      <div style={{ display: "flex", justifyContent: "center", marginTop: "50px" }}>
+        <ChatWindow />
+      </div>
+    </ChatProvider>
+  );
+};
+
+export default App;
