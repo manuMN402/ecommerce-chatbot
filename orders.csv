@@ -1,0 +1,5 @@
+order_id,product_id,customer_id,status
+12345,1,501,shipped
+12346,2,502,pending
+12347,1,503,delivered
+12348.3.504,cancelled
